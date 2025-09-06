@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>차량 정보 OCR API</title>
+  <style>
+    :root{
+      --box-w: 40vw;          /* 기본 가로 폭: 화면의 50% */
+      --ratio: 0.6;          /* 5:3 비율 = 0.6 */
+      --max-w: 900px;         /* 너무 커지지 않도록 상한 */
+      --min-w: 280px;         /* 너무 작지 않도록 하한 */
+    }
+    body{
+      font-family: Arial, sans-serif;
+      background:#f0f2f5;
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding:24px 16px 48px;
+    }
+    h2{ margin:8px 0 4px; }
+    #hint{font-size:.9rem;color:#666;margin:4px 0 16px;}
+    #status{margin:4px 0 12px;font-size:.95rem}
+    .badge{display:inline-block;padding:4px 8px;border-radius:6px;background:#eee}
+    .ok{background:#e6ffed;color:#0a7c2f}.warn{background:#fff4e5;color:#8a5a00}.err{background:#ffe6e6;color:#a40}
+    #actions{margin:10px 0 16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+    button{padding:10px 14px;border:none;border-radius:8px;background:#1f6feb;color:#fff;cursor:pointer}
+    button.secondary{background:#666}
+    button:disabled{opacity:.5;cursor:not-allowed}
+
+    /* 업로드 박스 (4:3, 가로 50%) */
+    .box{
+      width:min(max(var(--box-w), var(--min-w)), var(--max-w));
+      height:calc(min(max(var(--box-w), var(--min-w)), var(--max-w)) * var(--ratio));
+      background:#fff;
+      border:2px dashed #c9d1d9;
+      border-radius:12px;
+      display:flex;align-items:center;justify-content:center;
+      position:relative;overflow:hidden;
+      box-shadow:0 4px 8px rgba(0,0,0,.08);
+      transition: border-color .15s ease;
+    }
+    .box.dragover{ border-color:#1f6feb; }
+    #upload-text{color:#666;font-size:1rem;position:absolute;pointer-events:none;text-align:center;padding:0 12px}
+    #image-preview{max-width:100%;max-height:100%;display:none;object-fit:contain}
+
+    /* 결과 박스도 같은 폭, 내용은 자동 높이 */
+    #result-container{
+      margin-top:16px;
+      width:min(max(var(--box-w), var(--min-w)), var(--max-w));
+      background:#fff;border-radius:12px;
+      box-shadow:0 4px 8px rgba(0,0,0,.08);
+      padding:14px;
+    }
+    #result-title{margin:0 0 8px 0}
+    #result{font-size:.95rem;color:#333;white-space:pre-wrap;word-break:break-word}
+    #loader{border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite;display:none;margin-top:10px}
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+    @media (max-width: 700px){
+      :root{ --box-w: 90vw; } /* 작은 화면에서는 90%로 */
+    }
+  </style>
+</head>
+<body>
+  <h2>차량 VIN 정보 OCR API</h2>
+  <div id="status">상태: <span id="status-badge" class="badge warn">확인 중…</span></div>
+
+  <div id="actions">
+    <button id="pick">이미지 선택</button>
+    <input type="file" id="file-input" accept="image/*" style="display:none"/>
+  </div>
+
+  <div id="ocr-box" class="box">
+    <span id="upload-text">여기에 이미지를 놓거나 클릭해서 업로드</span>
+    <img id="image-preview" alt="미리보기"/>
+  </div>
+
+  <div id="loader"></div>
+
+  <div id="result-container">
+    <h3 id="result-title">인식 결과(JSON):</h3>
+    <pre id="result">이미지를 업로드하면 결과 JSON이 그대로 표시됩니다.</pre>
+  </div>
+
+  <script>
+    const box = document.getElementById('ocr-box');
+    const fileInput = document.getElementById('file-input');
+    const preview = document.getElementById('image-preview');
+    const uploadText = document.getElementById('upload-text');
+    const resultEl = document.getElementById('result');
+    const loader = document.getElementById('loader');
+    const statusBadge = document.getElementById('status-badge');
+    const btnPick = document.getElementById('pick');
+
+    const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
+
+    function setStatus(state) {
+      // state: 'ready' | 'loading' | 'error'
+      if (state === 'ready') {
+        statusBadge.textContent = 'Ready';
+        statusBadge.className = 'badge ok';
+        btnPick.disabled = false;
+      } else if (state === 'loading') {
+        statusBadge.textContent = 'Initializing…';
+        statusBadge.className = 'badge warn';
+        btnPick.disabled = true;
+      } else { // error or unknown
+        statusBadge.textContent = '에러';
+        statusBadge.className = 'badge err';
+        btnPick.disabled = true;
+      }
+    }
+
+    async function getStatus() {
+      try {
+        //const r = await fetch('/status', {cache:'no-store'});
+        const r = await fetch('/api/v1/status', {cache:'no-store'}); 
+        if (!r.ok) throw new Error('status ' + r.status);
+        const j = await r.json();
+        setStatus(j.status);
+        return j.status;
+      } catch (e) {
+        setStatus('error');
+        return 'error';
+      }
+    }
+
+    async function ensureReady({maxWaitMs=120000}={}) {
+      const start = Date.now();
+      while (Date.now()-start < maxWaitMs) {
+        const st = await getStatus();
+        if (st === 'ready') return true;
+        await sleep(2000);
+      }
+      return false;
+    }
+
+    function showLoading(on){
+      loader.style.display = on ? 'block' : 'none';
+    }
+    function showPreview(file){
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+        uploadText.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function postOCR(file){
+      // 새로운 엔드포인트는 /ocr/car-info
+      const fd = new FormData();
+      fd.append('image_file', file);
+      //const r = await fetch('/ocr/car-info', { method: 'POST', body: fd });
+      const r = await fetch('/api/v1/ocr/car-info', { method: 'POST', body: fd }); // 여기를 수정
+      const text = await r.text();
+      // 가변 응답 방어: 파싱 시도 후, 실패하면 원문 출력
+      try { return JSON.parse(text); } catch { return text; }
+    }
+
+    async function runFlow(file){
+      if (!file || !file.type || !file.type.startsWith('image/')) {
+        alert('이미지 파일을 선택하세요.');
+        return;
+      }
+      resultEl.textContent = '준비 확인 중...';
+      showLoading(true);
+      try{
+        // 상태 확인 및 대기
+        const st = await getStatus();
+        if (st !== 'ready') {
+          resultEl.textContent = '모델 로딩 중… 잠시만 기다려주세요.';
+          const ok = await ensureReady({maxWaitMs: 120000});
+          if (!ok) {
+            resultEl.textContent = '서버가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.';
+            return;
+          }
+        }
+
+        // 미리보기
+        showPreview(file);
+
+        // 실제 OCR
+        resultEl.textContent = '인식 중…';
+        const data = await postOCR(file);
+
+        // 요청: 받은 JSON을 "그대로" 출력
+        if (typeof data === 'string') {
+          resultEl.textContent = data; // 문자열이면 그대로
+        } else {
+          resultEl.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (err) {
+        console.error(err);
+        resultEl.textContent = '오류 발생: ' + (err?.message || err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 이벤트 바인딩
+    btnPick.addEventListener('click', ()=>fileInput.click());
+    fileInput.addEventListener('change', ()=>{
+      const f = fileInput.files && fileInput.files[0];
+      if (f) runFlow(f);
+      // 동일 파일 다시 선택 가능하도록
+      fileInput.value = '';
+    });
+
+    // 드래그 앤 드롭
+    box.addEventListener('dragover', (e)=>{ e.preventDefault(); box.classList.add('dragover'); });
+    box.addEventListener('dragleave', (e)=>{ e.preventDefault(); box.classList.remove('dragover'); });
+    box.addEventListener('drop', (e)=>{
+      e.preventDefault(); box.classList.remove('dragover');
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) runFlow(f);
+    });
+    // 클릭으로도 선택
+    box.addEventListener('click', ()=>fileInput.click());
+
+    // 페이지 로드시 한 번 상태 체크
+    document.addEventListener('DOMContentLoaded', ()=>{ getStatus(); });
+  </script>
+</body>
+</html>
