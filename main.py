@@ -1,5 +1,17 @@
 #접속주소 : http://127.0.0.1:8000/api/v1/
 
+
+# 컨테이너 실행 (컨테이너 이름: vin-ocr)
+# cd ~/2_CAR_VIN_OCR_AWS1
+# sudo docker run -d --name vin-ocr --restart=always -p 8080:8080 vin-ocr
+
+
+#sudo docker ps  #실행확인
+ 
+#sudo docker logs -f vin-ocr  #로그 확인
+# 
+
+
 import os
 import time
 import logging
