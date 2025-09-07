@@ -33,8 +33,16 @@ def get_client_status():
     return status, error_message
 
 # YOLOv8 모델 로드
-MODEL_PATH = r"C:/01_Coding/250801_CAR_OCR_PHOTO/2_CAR_VIN_OCR_AWS1/best_v2_250830.pt"
-yolo_model = YOLO(MODEL_PATH)
+try:
+    MODEL_PATH = best_v2_250830.pt
+except:
+    MODEL_PATH = r"C:/01_Coding/250801_CAR_OCR_PHOTO/2_CAR_VIN_OCR_AWS1/best_v2_250830.pt"
+
+try:
+    yolo_model = YOLO(MODEL_PATH)
+except Exception as e:
+    print(f"YOLO 모델 로드 실패: {e}")
+    yolo_model = None
 
 
 
@@ -514,7 +522,7 @@ if __name__ == "__main__":
             test_images.append(filename)
         # 5개 이미지만 처리하고 종료
         # 테스트 이미지 개수를 제한하고 싶을 때 사용
-        if len(test_images) > 2:
+        if len(test_images) > 1:
             print("설정한 개수 만큼 이미지 리스트 추가")
             break
         i += 1
