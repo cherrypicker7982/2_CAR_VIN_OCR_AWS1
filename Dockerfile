@@ -23,9 +23,8 @@ COPY ocr_roboflow_GCV_v1.py .
 COPY index.html .
 
 # FastAPI 애플리케이션이 사용할 포트를 외부에 노출합니다.
-EXPOSE 8000
+EXPOSE 8080
 
 # 컨테이너 실행 시 실행될 명령어를 정의합니다.
-# HOST를 0.0.0.0으로 설정하여 외부 접속을 허용합니다.
-# GOOGLE_API_KEY 환경 변수는 컨테이너 실행 시 직접 전달합니다.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# HOST를 0.0.0.0으로 설정하여 외부 접속을 허용하고, 포트는 8080으로 변경합니다.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
