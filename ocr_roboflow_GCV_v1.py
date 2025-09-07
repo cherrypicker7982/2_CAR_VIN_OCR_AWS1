@@ -34,7 +34,7 @@ def get_client_status():
 
 # YOLOv8 모델 로드
 try:
-    MODEL_PATH = best_v2_250830.pt
+    MODEL_PATH = "best_v2_250830.pt"
 except:
     MODEL_PATH = r"C:/01_Coding/250801_CAR_OCR_PHOTO/2_CAR_VIN_OCR_AWS1/best_v2_250830.pt"
 
