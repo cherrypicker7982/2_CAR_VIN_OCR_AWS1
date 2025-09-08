@@ -1,6 +1,14 @@
 #접속주소 : http://127.0.0.1:8000/api/v1/
 
 
+# sudo -i
+# cd ~
+# git pull origin main #업데이트
+# git clone https://github.com/cherrypicker7982/2_CAR_VIN_OCR_AWS1.git
+# cd 2_CAR_VIN_OCR_AWS1
+
+
+
 # 컨테이너 실행 (컨테이너 이름: vin-ocr)
 # cd ~/2_CAR_VIN_OCR_AWS1
 # sudo docker run -d --name vin-ocr --restart=always -p 8080:8080 vin-ocr
