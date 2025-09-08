@@ -262,3 +262,4 @@ docker logs -f vin-ocr
 - Google Cloud Vision API 사용량에 따라 비용이 발생할 수 있습니다.
 - 프로덕션 환경에서는 API 키를 환경 변수로 관리하는 것을 권장합니다.
 - 정기적인 모델 성능 평가 및 업데이트가 필요합니다.
+

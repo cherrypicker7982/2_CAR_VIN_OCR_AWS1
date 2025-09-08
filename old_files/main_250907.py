@@ -11,25 +11,11 @@
 #sudo docker logs -f vin-ocr  #로그 확인
 # 
 
-#접속주소 : http://127.0.0.1:8000/api/v1/
-
-
-# 컨테이너 실행 (컨테이너 이름: vin-ocr)
-# cd ~/2_CAR_VIN_OCR_AWS1
-# sudo docker run -d --name vin-ocr --restart=always -p 8080:8080 vin-ocr
-
-
-#sudo docker ps  #실행확인
- 
-#sudo docker logs -f vin-ocr  #로그 확인
-# 
-
 
 import os
 import time
 import logging
 import asyncio
-import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException, status, APIRouter
@@ -91,12 +77,12 @@ async def get_status():
 # OCR 작업을 별도의 스레드에서 실행하기 위한 헬퍼 함수
 def _run_ocr_blocking(temp_path: str):
     """
-    OCR 처리를 동기적으로 실행하고 결과를 JSON 문자열로 반환합니다.
+    OCR 처리를 동기적으로 실행하고 결과를 반환합니다.
+    `process_and_extract_info` 함수가 이미 클라이언트 객체를 내부적으로 사용하도록 설계되어 있습니다.
     """
     try:
-        # process_and_extract_info가 이제 JSON 문자열을 직접 반환합니다.
-        json_result = process_and_extract_info(temp_path)
-        return json_result
+        car_info, result_status = process_and_extract_info(temp_path)
+        return car_info, result_status
     finally:
         # 임시 파일 정리
         os.remove(temp_path)
@@ -146,15 +132,15 @@ async def extract_car_info_api(
     # 3. OCR 실행
     try:
         loop = asyncio.get_running_loop()
-        # process_and_extract_info가 이제 JSON 문자열 하나만 반환하므로,
-        # 반환 값을 하나만 받도록 수정합니다.
-        json_string_result = await asyncio.wait_for(
+        car_info, result_status = await asyncio.wait_for(
             loop.run_in_executor(None, _run_ocr_blocking, temp_path),
             timeout=TIMEOUT_SECONDS
         )
         
-        # JSON 문자열을 JSONResponse로 반환
-        return JSONResponse(content=json.loads(json_string_result))
+        if result_status == "Success":
+            return JSONResponse(content={"status": "success", "data": car_info})
+        else:
+            return JSONResponse(content={"status": "error", "message": result_status}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     except asyncio.TimeoutError:
         log.error(f"OCR process timed out after {TIMEOUT_SECONDS} seconds.")

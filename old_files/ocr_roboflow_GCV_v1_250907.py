@@ -1,16 +1,12 @@
 
 #ocr_roboflow_GCV_v1: 파일명 ocr_roboflow_5_GCP.PY 동일 파일임. 배포용으로 이름만 변경 실시.
 
-#ocr_roboflow_GCV_v2: 파일명 ocr_roboflow_GCV_v1.py 동일 파일임. 배포용으로 이름만 변경 실시.
-
 
 import os
 import cv2
 from ultralytics import YOLO
 from google.cloud import vision
 import io
-import time
-import json # JSON 처리를 위해 추가
 
 # 1. API 키 설정 (YOUR_API_KEY 부분을 본인의 API 키로 교체하세요)
 # --- Vision API 클라이언트 초기화 및 상태 관리 ---
@@ -372,22 +368,15 @@ def save_image_with_boxes(image, detections, file_path, save_dir, filename):
 
 def process_and_extract_info(image_path, min_conf_vin=0.8, min_conf_sticker=0.5):
     """
-    메인 워크플로우를 실행하고 최종 정보를 JSON 형태로 반환합니다.
+    메인 워크플로우를 실행하고 최종 정보를 반환합니다.
     """
-    t0 = time.time()  # 시간 측정 시작
-    
     print(f"\n--- 이미지 처리 시작: {os.path.basename(image_path)} ---")
     
     # 1. 이미지 로드 및 전처리
     image_np = cv2.imread(image_path)
     if image_np is None:
         print(f"❌ 이미지 파일을 읽을 수 없습니다: {image_path}")
-        elapsed_sec = round(time.time() - t0, 2)
-        return json.dumps({
-            "status": "error",
-            "error_message": "Image Read Error",
-            "elapsed_sec": elapsed_sec
-        }, indent=4)
+        return None, "Image Read Error"
 
     image_resized = resize_image_if_needed(image_np)
     
@@ -497,39 +486,19 @@ def process_and_extract_info(image_path, min_conf_vin=0.8, min_conf_sticker=0.5)
                     print("⚠️ vin_area 폴백에서도 텍스트를 인식하지 못했습니다.")
             else:
                 print("ℹ️ vin_area 탐지가 없어 폴백을 수행하지 못했습니다.")
-        
-        elapsed_sec = round(time.time() - t0, 2)
 
         if car_info:
-            result_data = {
-                "status": "success",
-                "extracted_info": car_info,
-                "elapsed_sec": elapsed_sec,
-                "used_area": crop_info
-            }
             print("--- 추출 결과 ---")
-            print(f"  - 사용된 영역: {crop_info}")
-            print(f"  - 총 소요 시간: {elapsed_sec}초")
+            print(f"사용된 영역: {crop_info}")
             for key, value in car_info.items():
                 print(f"  - {key}: {value}")
-            return json.dumps(result_data, indent=4)
+            return car_info, "Success"
         else:
-            result_data = {
-                "status": "error",
-                "error_message": "No Text Detected",
-                "elapsed_sec": elapsed_sec
-            }
-            return json.dumps(result_data, indent=4)
-
+            return None, "No Text Detected"
 
     except Exception as e:
-        elapsed_sec = round(time.time() - t0, 2)
         print(f"❌ GCV API 호출 중 오류 발생: {e}")
-        return json.dumps({
-            "status": "error",
-            "error_message": str(e),
-            "elapsed_sec": elapsed_sec
-        }, indent=4)
+        return None, str(e)
     # '''
     
 
@@ -561,9 +530,6 @@ if __name__ == "__main__":
         print(f"❌ '{image_dir}' 폴더에 처리할 이미지 파일이 없습니다.")
     for filename in test_images:
         test_path = os.path.join(image_dir, filename)
-        json_result = process_and_extract_info(test_path)
-        print("\n--- JSON 출력 ---")
-        print(json_result)
-        print("-------------------\n")
+        process_and_extract_info(test_path)
     
     print("\n--- 통합 워크플로우 종료 ---")
